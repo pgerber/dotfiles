@@ -49,6 +49,13 @@ def parse_args():
     return parser.parse_args()
 
 
+def assert_valid_address(address):
+    if not address.endswith('.onion'):
+        print('address must end with ".onion"', file=sys.stderr)
+        exit(1)
+
+
 if __name__ == "__main__":
     args = parse_args()
+    assert_valid_address(args.address)
     generate(args.address, args.key, args.save_image)
