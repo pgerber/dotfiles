@@ -1,0 +1,87 @@
+#!/usr/bin/python3
+from pathlib import Path
+import os
+import sys
+
+
+class SandboxError(Exception):
+    pass
+
+
+class Sandbox:
+    base_dir = Path('~/.local/share/tor-browser-sandboxes').expanduser()
+    link_dir = Path('~/td').expanduser()
+    exec = 'sandboxed-tor-browser'
+    pulse_cookie = Path('~/.config/pulse/cookie').expanduser()
+    pulse_server = 'unix:/var/run/user/{}/pulse/native'.format(os.getuid())
+
+    def __init__(self, args):
+        self.create_base_dir()
+
+        arg = args[1] if len(args) > 1 else ''
+        if arg == '++':  # list sandboxes
+            self.name = None
+            self.args = None
+            self.path = None
+        elif arg.startswith('++'):  # create sandbox
+            self.name = arg[2:]
+            self.args = args[2:]
+            self.path = self.base_dir / self.name
+            self.create_sandbox()
+        elif arg.startswith('+'): # start given sandbox
+            self.name = arg[1:]
+            self.args = args[2:]
+            self.path = self.base_dir / self.name
+            if not self.path.exists():
+                raise SandboxError('No sandboxed named {0!r}, use \'++{0}\' to create it or \'++\' to list available sandboxes.'.format(self.name))
+        else:  # start or create 'default' sandbox
+            self.name = 'default'
+            self.args = args[1:]
+            self.path = self.base_dir / self.name
+            self.create_sandbox()
+
+    def create_sandbox(self):
+        self.create_base_dir()
+        self.create_download_link()
+
+    def create_base_dir(self):
+        self.base_dir.mkdir(mode=0o700, exist_ok=True)
+
+    def create_download_link(self):
+        self.link_dir.mkdir(mode=0o700, exist_ok=True)
+        src = self.path / 'data' / 'sandboxed-tor-browser' / 'tor-browser' / 'Browser' / 'Downloads'
+        dest = self.link_dir / self.name
+        if not dest.is_symlink():
+            dest.symlink_to(src, target_is_directory=True)
+
+    def start(self):
+        env = os.environ.copy()
+        env.update(
+            XDG_RUNTIME_DIR = (self.path / 'runtime').as_posix(),
+            XDG_CONFIG_HOME = (self.path / 'config').as_posix(),
+            XDG_DATA_HOME   = (self.path / 'data').as_posix(),
+            PULSE_COOKIE    = self.pulse_cookie.as_posix(),
+            PULSE_SERVER    = self.pulse_server
+        )
+        os.execvpe(self.exec, [self.exec] + self.args, env)
+
+    def list_sandboxes(self):
+        if self.base_dir.exists():
+            for dir in sorted(self.base_dir.iterdir()):
+                print(dir.stem)
+
+
+def main():
+    try:
+        sb = Sandbox(sys.argv)
+        if sb.name is not None:
+            sb.start()
+        else:
+            sb.list_sandboxes()
+    except SandboxError as e:
+        print(e)
+        exit(1)
+
+
+if __name__ == '__main__':
+    main()
