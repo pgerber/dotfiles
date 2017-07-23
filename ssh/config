@@ -1,0 +1,70 @@
+# --- Examples ---
+#
+# ### example: .onion host entry
+# Match host myhost.onion
+#     HostKeyAlias myhost.onion
+#     HostName u6h88s2m1c76bsar.onion
+#     Port 12345
+#
+# ### example: VM host
+# Match host my-vm.virt
+#     HostKeyAlias my-vm.virt
+#     Hostname 192.168.88.192
+#
+# ### example: connect via jump host
+# Match host my-host.net
+#     ProxyCommand ssh -W %h:%p -o Compression=no myhost.onion
+#
+#     # alternatively to the ProxyCommand this can be used (comma separated list of jump hosts)
+#     # ProxyJump myhost.onion
+
+
+
+# --- Handle .onion domains ---
+Match host *.onion
+    VerifyHostKeyDNS no
+    CheckHostIP no
+    # requires netcat-openbsd
+    ProxyCommand torsocks -u ssh -p ssh-%r@%h:%p nc -- %h %p
+
+# --- Virtual Machines (.virt) ---
+Match host *.virt
+    User user
+    ProxyCommand none
+    ProxyJump none
+    VerifyHostKeyDNS no
+
+
+# --- LAN and Private Addresses (.local, 10.0.0.0/8, …) ---
+Match !host *'* exec "python3 -c $'import ipaddress\ntry:\n  ipaddress.ip_address(\'\'\'%h\'\'\').is_private or exit(1)\nexcept ValueError:\n  exit(1)'"
+    Compression no
+    ProxyCommand=none
+    ProxyJump none
+Match host *.local
+    Compression no
+    ProxyCommand=none
+    ProxyJump none
+
+# --- Don's Torify by Default on User Request ---
+# used by sshdirect command to override default ProxyCommand
+Match exec "[ ${SSH_CONNECT_DIRECTLY_BY_DEFAULT-0} = 1 ]"
+    ProxyCommand none
+    ProxyJump none
+
+# --- Default Settings ---
+Match host *
+    # requires netcat-openbsd
+    ProxyCommand torsocks -u ssh -p ssh-%r@%h:%p nc -- %h %p
+
+    ChallengeResponseAuthentication no
+    KbdInteractiveAuthentication no
+    PasswordAuthentication no
+
+    IgnoreUnknown AddKeysToAgent
+    AddKeysToAgent yes
+
+    ServerAliveInterval 180
+    StrictHostKeyChecking yes
+    Compression yes
+
+    # LogLevel DEBUG
