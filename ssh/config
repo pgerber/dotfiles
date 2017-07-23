@@ -28,7 +28,7 @@ Match host *.onion
     ProxyCommand torsocks -u ssh -p ssh-%r@%h:%p nc -- %h %p
 
 # --- Virtual Machines (.virt) ---
-Match host *.virt
+Match originalhost *.virt
     User user
     ProxyCommand none
     ProxyJump none
