@@ -1,0 +1,33 @@
+-
+  name:    add Tor key
+  apt_key: id=A3C4F0F979CAA22CDBA8F512EE8CBC9E886DDD89 keyserver=keys.gnupg.net
+-
+  name: install apt-transport-https
+  apt:  name=apt-transport-https update_cache=yes cache_valid_time=3600
+-
+  name: check if Tor is installed
+  command: dpkg-query --show --showformat='${db:Status-Status}' tor
+  changed_when: false
+  register: tor_stat
+-
+  name: Tor install status
+  debug: verbosity=1 msg={{ tor_stat }}
+-
+  name: temporarily add clearnet Tor repository
+  apt_repository: repo='deb https://deb.torproject.org/torproject.org {{ ansible_lsb.codename }} main'
+  when: tor_stat.stdout != 'installed'
+-
+  name: install Tor
+  apt: name=tor update_cache=yes cache_valid_time=3600 state=latest
+-
+  name: install apt-transport-tor
+  apt: name=apt-transport-tor
+-
+  name: remove clearnet Tor repository
+  apt_repository: state=absent repo='deb https://deb.torproject.org/torproject.org {{ ansible_lsb.codename }} main'
+-
+  name: add Tor .onion repository
+  apt_repository: repo='deb tor+http://sdscoq7snqtznauu.onion/torproject.org {{ ansible_lsb.codename }} main'
+-
+  name: install arm
+  apt: name=tor-arm update_cache=yes cache_valid_time=3600 state=latest
