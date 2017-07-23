@@ -3,4 +3,4 @@ dist: trusty
 install:
   - pip3 install ansible
 script:
-    - run-parts tests/
+    - run-parts tests

@@ -51,7 +51,7 @@ def process(errno):
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Print details about errno matching given number, range or description.')
-    parser.add_argument('pattern', help='Errno number ("1"), range ("1-15") or case-insensitive 'regular expression that '
+    parser.add_argument('pattern', help='Errno number ("1"), range ("1-15") or case-insensitive regular expression that '
                         ' searches in the symbol names and descriptions.')
     return parser.parse_args()
 

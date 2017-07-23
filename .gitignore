@@ -1,2 +1,6 @@
 inventory
 playbooks/**/*.retry
+
+# Python bytecode
+__pycache__/
+*.py[cod]

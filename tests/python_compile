@@ -1,0 +1,23 @@
+#!/usr/bin/python3
+import os
+import re
+import subprocess
+
+SHEBANG = re.compile(b'^#!/usr/bin/(python3|env python3)(\s|$)')
+
+err = False
+for dirpath, dirnames, filenames in os.walk('.'):
+    if dirpath.startswith('./.git/'):
+        continue
+    for filename in filenames:
+        path = os.path.join(dirpath, filename)
+        with open(path, 'rb') as f:
+            line = f.readline()
+        if SHEBANG.match(line):
+            rc = subprocess.call(['python3', '-m', 'py_compile', path])
+            if rc != 0:
+                print('ERROR: failed to compile {!r}'.format(path))
+                err = True
+
+if err:
+    exit(1)
