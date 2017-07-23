@@ -29,5 +29,8 @@
   name: add Tor .onion repository
   apt_repository: repo='deb tor+http://sdscoq7snqtznauu.onion/torproject.org {{ ansible_lsb.codename }} main'
 -
+  name: install Tor keyring
+  apt: name=deb.torproject.org-keyring update_cache=yes cache_valid_time=3600 state=latest
+-
   name: install arm
-  apt: name=tor-arm update_cache=yes cache_valid_time=3600 state=latest
+  apt: name=tor-arm state=latest
