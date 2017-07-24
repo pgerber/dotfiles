@@ -40,7 +40,7 @@ Match !host *'* exec "python3 -c $'import ipaddress\ntry:\n  ipaddress.ip_addres
     Compression no
     ProxyCommand=none
     ProxyJump none
-Match host *.local
+Match host *.local originalhost *.local
     Compression no
     ProxyCommand=none
     ProxyJump none
