@@ -1,4 +1,0 @@
-#!/bin/sh
-relay="$1"
-shift
-exec ssh -o ProxyJump="$relay" "$@"
