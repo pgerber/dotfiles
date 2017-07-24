@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 import os
 import re
-import subprocess
+import py_compile
 
 SHEBANG = re.compile(b'^#!/usr/bin/(python3|env python3)(\s|$)')
 
@@ -14,9 +14,9 @@ for dirpath, dirnames, filenames in os.walk('.'):
         with open(path, 'rb') as f:
             line = f.readline()
         if SHEBANG.match(line):
-            rc = subprocess.call(['python3', '-m', 'py_compile', path])
-            if rc != 0:
-                print('ERROR: failed to compile {!r}'.format(path))
+            bytecode_path = py_compile.compile(path)
+            if bytecode_path is None:
+                print()
                 err = True
 
 if err:
