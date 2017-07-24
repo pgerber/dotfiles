@@ -1,9 +1,10 @@
 #!/usr/bin/python3
 import glob
+import pathlib
 import textwrap
 import yaml
 
-yaml_files = glob.glob('**/*.yml', recursive=True)
+yaml_files = [i.as_posix() for i in pathlib.Path().rglob('*.yml')]
 
 err = False
 for file in yaml_files:

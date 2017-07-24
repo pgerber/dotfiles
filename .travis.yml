@@ -1,6 +1,10 @@
-language: python3
 dist: trusty
+addons:
+  apt:
+    packages:
+      - python3-yaml
+      - python3-pip
 install:
-  - pip3 install ansible
+    - pip3 install --user ansible
 script:
     - run-parts tests
