@@ -57,7 +57,7 @@ class Sandbox:
 
     def create_logfile(self):
         dir = '/dev/shm'
-        if os.access(dir, os.W_OK) os.path.ismount(dir):
+        if os.access(dir, os.W_OK) and os.path.ismount(dir):
             return tempfile.mktemp('.log', 'tb-{}-'.format(self.name), dir)
 
 
