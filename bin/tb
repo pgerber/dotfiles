@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 from pathlib import Path
 import os
+import tempfile
 import sys
 
 
@@ -54,7 +55,18 @@ class Sandbox:
         if not dest.is_symlink():
             dest.symlink_to(src, target_is_directory=True)
 
+    def create_logfile(self):
+        dir = '/dev/shm'
+        if os.access(dir, os.W_OK) os.path.ismount(dir):
+            return tempfile.mktemp('.log', 'tb-{}-'.format(self.name), dir)
+
+
     def start(self):
+        args = ['-debug']
+        logfile = self.create_logfile()
+        if logfile is not None:
+            args.extend(['-l', logfile])
+
         env = os.environ.copy()
         env.update(
             XDG_RUNTIME_DIR = (self.path / 'runtime').as_posix(),
@@ -63,7 +75,7 @@ class Sandbox:
             PULSE_COOKIE    = self.pulse_cookie.as_posix(),
             PULSE_SERVER    = self.pulse_server
         )
-        os.execvpe(self.exec, [self.exec] + self.args, env)
+        os.execvpe(self.exec, [self.exec] + args + self.args, env)
 
     def list_sandboxes(self):
         if self.base_dir.exists():
