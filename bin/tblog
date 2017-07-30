@@ -1,0 +1,51 @@
+#!/usr/bin/python3
+import argparse
+import os
+import pathlib
+import re
+import sys
+import time
+
+
+def is_logfile(path, name):
+    if path.is_file() and path.stat().st_uid == os.getuid():
+        match = re.fullmatch('tb-(.*)-.{8}\.log', path.name)
+        return match and match.group(1) == name
+    return False
+
+
+def log_file(path, name):
+    dir = pathlib.Path(path)
+    logs = filter(lambda p: is_logfile(p, name), dir.iterdir())
+    return max(logs, default=None, key=lambda p: p.stat().st_mtime)
+
+
+def print_log(path, *, follow=False):
+    with path.open() as f:
+        while True:
+            for line in f:
+                print(line, end='')
+            if not follow:
+                break
+            time.sleep(1)
+
+
+def parse_args(args):
+    parser = argparse.ArgumentParser(description='Show latest log file for given Tor Browser Sandbox.')
+    parser.add_argument('name', nargs='?', default='default', help='sandbox name')
+    parser.add_argument('--follow', '-f', action='store_true', help='follow output')
+    return parser.parse_args(args=args)
+
+def main(args):
+    args = parse_args(args)
+    log = log_file('/dev/shm/', args.name)
+    if log is None:
+        print('no logfile for {!r}'.format(args.name))
+        return 1
+    print_log(log, follow=args.follow)
+
+    return 0
+
+
+if __name__ == '__main__':
+    exit(main(sys.argv[1:]))

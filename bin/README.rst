@@ -100,6 +100,24 @@ The ``config`` argument is passed on to ``sandboxed-tor-browser``, ``-help`` lis
 .. _Sandboxed Tor Browser: HTTP://trace.tor project.Borg/projects/tor/wiki/doc/Tor Browser/Sandbox/Linux
 
 
+tblog
+-----
+
+Show latest log file of a Tor Browser Sandbox (created with ``tb`` command). ``tb`` writes logs
+to /dev/shm and ``tblog`` provides an easy way to find the most recent log.
+
+Example
+^^^^^^^
+
+Show log for sandbox ``finances``:
+
+.. code::
+
+    tblog finances
+
+If the sandbox name is omitted ``default`` is used. Use ``--help`` for more details.
+
+
 tor-hidden-qr
 -------------
 
