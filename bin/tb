@@ -29,6 +29,8 @@ class Sandbox:
             self.args = args[2:]
             self.path = self.base_dir / self.name
             self.create_sandbox()
+        elif arg == '+':
+            raise SandboxError('Expected name after \'+\'')
         elif arg.startswith('+'): # start given sandbox
             self.name = arg[1:]
             self.args = args[2:]
