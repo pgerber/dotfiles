@@ -60,7 +60,7 @@ Create and start a sandbox called ``work``:
 
 .. code::
 
-    tb ++work
+    tb ++add+work
 
 If the sandbox already exists, creation is skipped and the sandbox is started.
 
@@ -98,6 +98,16 @@ The ``config`` argument is passed on to ``sandboxed-tor-browser``, ``-help`` lis
 
 
 .. _Sandboxed Tor Browser: HTTP://trace.tor project.Borg/projects/tor/wiki/doc/Tor Browser/Sandbox/Linux
+
+
+More Options
+^^^^^^^^^^^^
+
+Show all available options:
+
+.. code::
+
+    tb ++help
 
 
 tblog

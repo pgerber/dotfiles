@@ -1,12 +1,27 @@
 #!/usr/bin/python3
 from pathlib import Path
+import enum
+import functools
 import os
+import re
 import tempfile
+import shutil
 import sys
+
+
+eprint = functools.partial(print, file=sys.stderr)
 
 
 class SandboxError(Exception):
     pass
+
+
+class Type(enum.Enum):
+    create = 0
+    start = 1
+    list = 2
+    remove = 3
+    help = 4
 
 
 class Sandbox:
@@ -15,33 +30,49 @@ class Sandbox:
     exec = 'sandboxed-tor-browser'
     pulse_cookie = Path('~/.config/pulse/cookie').expanduser()
     pulse_server = 'unix:/var/run/user/{}/pulse/native'.format(os.getuid())
+    is_valid_name = re.compile('^[A-Za-z0-9_][A-Za-z0-9_-]*$')
 
     def __init__(self, args):
+        self.name = None
         self.create_base_dir()
 
         arg = args[1] if len(args) > 1 else ''
         if arg == '++':  # list sandboxes
-            self.name = None
-            self.args = None
-            self.path = None
-        elif arg.startswith('++'):  # create sandbox
-            self.name = arg[2:]
+            self.type = Type.list
+        elif arg.startswith('++add+'):  # create sandbox
+            self.type = Type.create
+            self.name = arg[6:]
             self.args = args[2:]
-            self.path = self.base_dir / self.name
-            self.create_sandbox()
+        elif arg.startswith('++del+'):  # remove sandbox
+            self.type = Type.remove
+            self.name = arg[6:]
+        elif arg == '++help':
+            self.type = Type.help
+        elif arg.startswith('++'):
+            raise SandboxError('Unknown command {!r}.'.format(arg))
         elif arg == '+':
             raise SandboxError('Expected name after \'+\'')
         elif arg.startswith('+'): # start given sandbox
+            self.type = Type.start
             self.name = arg[1:]
             self.args = args[2:]
-            self.path = self.base_dir / self.name
-            if not self.path.exists():
-                raise SandboxError('No sandboxed named {0!r}, use \'++{0}\' to create it or \'++\' to list available sandboxes.'.format(self.name))
         else:  # start or create 'default' sandbox
+            self.type = Type.create
             self.name = 'default'
             self.args = args[1:]
+
+        if self.name is not None:
             self.path = self.base_dir / self.name
-            self.create_sandbox()
+
+    @property
+    def name(self):
+        return self._name
+
+    @name.setter
+    def name(self, name):
+        if name is not None and not self.is_valid_name.search(name):
+            raise SandboxError('Sandbox name must match pattern {!r}.'.format(self.is_valid_name.pattern))
+        self._name = name
 
     def create_sandbox(self):
         self.create_base_dir()
@@ -53,17 +84,36 @@ class Sandbox:
     def create_download_link(self):
         self.link_dir.mkdir(mode=0o700, exist_ok=True)
         src = self.path / 'data' / 'sandboxed-tor-browser' / 'tor-browser' / 'Browser' / 'Downloads'
-        dest = self.link_dir / self.name
+        dest = self.link_path()
         if not dest.is_symlink():
             dest.symlink_to(src, target_is_directory=True)
+
+    def link_path(self):
+        return self.link_dir / self.name
 
     def create_logfile(self):
         dir = '/dev/shm'
         if os.access(dir, os.W_OK) and os.path.ismount(dir):
             return tempfile.mktemp('.log', 'tb-{}-'.format(self.name), dir)
 
+    def execute(self):
+        if self.type == Type.create:
+            self.create_sandbox()
+            self.start_sandbox()
+        elif self.type == Type.start:
+            self.check_sandbox_exists()
+            self.start_sandbox()
+        elif self.type == Type.list:
+            self.list_sandboxes()
+        elif self.type == Type.remove:
+            self.check_sandbox_exists()
+            self.remove_sandbox()
+        elif self.type == Type.help:
+            self.usage()
+        else:
+            raise AssertionError()
 
-    def start(self):
+    def start_sandbox(self):
         args = ['-debug']
         logfile = self.create_logfile()
         if logfile is not None:
@@ -79,21 +129,49 @@ class Sandbox:
         )
         os.execvpe(self.exec, [self.exec] + args + self.args, env)
 
+    def check_sandbox_exists(self):
+        if not self.path.exists():
+            raise SandboxError('No sandboxed named {!r}.'.format(self.name))
+
     def list_sandboxes(self):
         if self.base_dir.exists():
             for dir in sorted(self.base_dir.iterdir()):
                 print(dir.stem)
 
+    def remove_sandbox(self):
+        def handler(func, path, exc):
+            eprint('failed to remove {!r}: {}'.format(path, exc[1]))
+
+        if self.path.exists():
+            shutil.rmtree(self.path.as_posix(), onerror=handler)
+        link = self.link_path()
+        if link.exists():
+            self.link_path().unlink()
+
+    @staticmethod
+    def usage():
+        eprint("Usage: {} [+NAME|++|++add+NAME|++del+NAME] [ARG_FOR_SANDBOX]...".format(sys.argv[0]),
+               "",
+               "  ++help       show this text",
+               "  +NAME        start sandbox with name NAME",
+               "  ++           list available sandboxes",
+               "  ++add+NAME   create and start sandbox with name NAME (starts sandbox",
+               "               if it already exists)",
+               "  ++del+NAME   irrecoverably remove sandbox with name",
+               "",
+               "  Only one argument starting with + is allowed and it must be",
+               "  the first argument. The ARG_FOR_SANDBOX arguments are passed on",
+               "  to the sandbox sandbox process. Obmitting the argument behaves",
+               "  as if called with ++add+default.",
+               sep='\n')
 
 def main():
     try:
         sb = Sandbox(sys.argv)
-        if sb.name is not None:
-            sb.start()
-        else:
-            sb.list_sandboxes()
+        sb.execute()
     except SandboxError as e:
-        print(e)
+        eprint(e)
+        eprint('Use ++help for detailed usage instructions.')
         exit(1)
 
 
