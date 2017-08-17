@@ -49,4 +49,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    exit(main(sys.argv[1:]))
+    try:
+        exit(main(sys.argv[1:]))
+    except KeyboardInterrupt:
+        exit(130)
