@@ -29,8 +29,25 @@
   name: add Tor .onion repository
   apt_repository: repo='deb tor+http://sdscoq7snqtznauu.onion/torproject.org {{ ansible_lsb.codename }} main'
 -
+  name: install alpha
+  when: version in ["a", "alpha"]
+  apt_repository: repo='deb tor+http://sdscoq7snqtznauu.onion/torproject.org tor-experimental-{{ alpha_version }}.x-{{ ansible_lsb.codename }} main'
+  register: alpha_repo
+-
+  name: install nightly
+  when: version in ["n", "nightly"]
+  apt_repository: repo='deb tor+http://sdscoq7snqtznauu.onion/torproject.org tor-nightly-master-{{ ansible_lsb.codename }} main'
+  register: nightly_repo
+-
+  name: update to latest Tor version (update to alpha/nightly)
+  when: alpha_repo.changed or nightly_repo.changed
+  apt: name=tor update_cache=yes state=latest
+-
   name: install Tor keyring
   apt: name=deb.torproject.org-keyring update_cache=yes cache_valid_time=3600 state=latest
+-
+  name: install Tor GeoIP DB
+  apt: name=tor-geoipdb update_cache=yes cache_valid_time=3600 state=latest
 -
   name: install arm
   apt: name=tor-arm state=latest

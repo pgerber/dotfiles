@@ -2,7 +2,16 @@
   name: install Tor
   hosts: '*'
   become: yes
+  vars:
+    alpha_version: 0.3.2
+  vars_prompt:
+    - name: version
+      prompt: Tor version, Debian only ([s]table/[a]lpha/[n]ightly)
+      default: stable
+      private: no
   tasks:
+    - fail: msg="Invalid Tor version entered '{{ version }}'"
+      when: version not in ['s', 'stable', 'a', 'alpha', 'n', 'nightly']
     - name: install lsb-release
       when: ansible_distribution == 'Debian'
       apt: name=lsb-release update_cache=yes cache_valid_time=3600
