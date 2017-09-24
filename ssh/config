@@ -45,7 +45,7 @@ Match originalhost *.local
     ProxyCommand none
     ProxyJump none
 
-# --- Don's Torify by Default on User Request ---
+# --- Don't Torify by Default on User Request ---
 # used by sshdirect command to override default ProxyCommand
 Match exec "[ ${SSH_CONNECT_DIRECTLY_BY_DEFAULT-0} = 1 ]"
     ProxyCommand none
