@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 import argparse
+from datetime import datetime
 import os
 import pathlib
 import re
@@ -14,10 +15,10 @@ def is_logfile(path, name):
     return False
 
 
-def log_file(path, name):
+def log_files(path, name):
     dir = pathlib.Path(path)
     logs = filter(lambda p: is_logfile(p, name), dir.iterdir())
-    return max(logs, default=None, key=lambda p: p.stat().st_mtime)
+    return sorted(logs, key=lambda p: p.stat().st_mtime, reverse=True)
 
 
 def print_log(path, *, follow=False):
@@ -34,18 +35,38 @@ def parse_args(args):
     parser = argparse.ArgumentParser(description='Show latest log file for given Tor Browser Sandbox.')
     parser.add_argument('name', nargs='?', default='default', help='sandbox name')
     parser.add_argument('--follow', '-f', action='store_true', help='follow output')
+    parser.add_argument('--list', '-l', action='store_true', help='List available logs for given sandbox.')
+    parser.add_argument('--previous', '-p', type=int, default=0,
+                        help='Select a previous log file. 0 is the newest logfile, 1 the second newest and so on.')
     return parser.parse_args(args=args)
+
+
+def print_logs(logs):
+    print(" NO -                PATH                 -     MODIFICATION TIME")
+    for no, log in enumerate(logs):
+        print("{:3} - {:35} - {}".format(no, log.as_posix(), datetime.fromtimestamp(log.stat().st_mtime)))
+    print()
+    print('Use -p NO to select a log file (e.g. -p 0).')
 
 
 def main(args):
     args = parse_args(args)
-    log = log_file('/dev/shm/', args.name)
-    if log is None:
-        print('no logfile for {!r}'.format(args.name), file=sys.stderr)
-        return 1
-    print_log(log, follow=args.follow)
+    logs = log_files('/dev/shm/', args.name)
 
-    return 0
+    if not logs:
+        print('No logfile for sandbox {!r} found.'.format(args.name), file=sys.stderr)
+        return 1
+
+    if args.list:
+        print_logs(logs)
+        return 0
+
+    if 0 <= args.previous < len(logs):
+        print_log(logs[args.previous], follow=args.follow)
+        return 0
+
+    print("Can't find previous log for sandbox {!r}. No log with number {}.".format(args.name, args.previous), file=sys.stderr)
+    return 1
 
 
 if __name__ == '__main__':
