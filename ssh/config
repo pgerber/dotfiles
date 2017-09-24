@@ -38,11 +38,11 @@ Match originalhost *.virt
 # --- LAN and Private Addresses (.local, 10.0.0.0/8, …) ---
 Match !host *'* exec "python3 -c $'import ipaddress\ntry:\n  ipaddress.ip_address(\'\'\'%h\'\'\').is_private or exit(1)\nexcept ValueError:\n  exit(1)'"
     Compression no
-    ProxyCommand=none
+    ProxyCommand none
     ProxyJump none
-Match host *.local originalhost *.local
+Match originalhost *.local
     Compression no
-    ProxyCommand=none
+    ProxyCommand none
     ProxyJump none
 
 # --- Don's Torify by Default on User Request ---
