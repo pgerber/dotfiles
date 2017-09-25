@@ -59,3 +59,8 @@
 -
   name: install arm
   apt: name=tor-arm state=latest
+-
+  name: set permissions on torrc
+  command: dpkg-statoverride --update --force --add root debian-tor 640 /etc/tor/torrc
+  register: result
+  changed_when: '"already exists" not in result.stderr'
