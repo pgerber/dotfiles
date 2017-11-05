@@ -1,0 +1,17 @@
+#!/usr/bin/python3
+import os
+import shlex
+import sys
+
+
+if len(sys.argv) < 3:
+    print("Usage: {} GROUP COMMAND [ARG]...".format(sys.argv[0]))
+    exit(127)
+
+if sys.argv[2].startswith('-'):
+    print('Command must not start with `-`')
+    exit(127)
+
+group = sys.argv[1]
+shell_cmd = 'exec ' + ' '.join(shlex.quote(arg) for arg in sys.argv[2:])
+os.execvp('sg', ['sg', group, '-c', shell_cmd])

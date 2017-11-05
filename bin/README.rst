@@ -34,6 +34,27 @@ By symbol/description:
      13 → EACCES          → Permission denied
 
 
+grexec
+------
+
+Execute command in different group (i.e. different GID).
+
+This is a wrapper around ``sg`` which executes a command in ``/bin/sh``. This wrapper
+replaces the shell using ``exec(3)`` after it ensured the command is properly quoted.
+
+Example
+^^^^^^^
+
+Execute ``firefox -P`` in group ``torify``.
+
+.. code:: bash
+
+    grpexec torify firefox -P
+
+``grpexec`` will refuse the execute any command starting with a "-" to avoid that it is
+interpreted as an option to exec. (Shells don't handle this uniformly.)
+
+
 tb (Sandboxed Tor Browser)
 --------------------------
 
