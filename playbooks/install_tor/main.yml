@@ -15,11 +15,11 @@
     - name: install lsb-release
       when: ansible_distribution == 'Debian'
       apt: name=lsb-release update_cache=yes cache_valid_time=3600
-    - include: install_debian.yml
+    - include_tasks: install_debian.yml
       when: ansible_pkg_mgr == 'apt' and ansible_distribution == 'Debian'
               and ansible_distribution_release != 'wheezy'
               and not (ansible_lsb.id == 'Raspbian' and ansible_architecture == 'armv6l')
-    - include: install_arch.yml
+    - include_tasks: install_arch.yml
       when: ansible_pkg_mgr == 'pacman'
-    - include: install_openbsd.yml
+    - include_tasks: install_openbsd.yml
       when: ansible_pkg_mgr == 'openbsd_pkg'

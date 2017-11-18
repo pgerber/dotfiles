@@ -14,6 +14,6 @@
   name: update Rust
   hosts: '*'
   tasks:
-    - include: update_rust.yml user={{ item }}
+    - include_tasks: update_rust.yml user={{ item }}
       become_user: '{{ item }}'
       with_items: [ peter, pg, user ]
