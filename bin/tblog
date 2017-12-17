@@ -43,8 +43,11 @@ def parse_args(args):
 
 def print_logs(logs):
     print(" NO -                PATH                 -     MODIFICATION TIME")
+    now = datetime.now().replace(microsecond=0)
     for no, log in enumerate(logs):
-        print("{:3} - {:35} - {}".format(no, log.as_posix(), datetime.fromtimestamp(log.stat().st_mtime)))
+        timestamp =  datetime.fromtimestamp(log.stat().st_mtime).replace(microsecond=0)
+        age = now - timestamp
+        print("{:3} - {:35} - {} ({} ago)".format(no, log.as_posix(), timestamp, age))
     print()
     print('Use -p NO to select a log file (e.g. -p 0).')
 
