@@ -1,0 +1,53 @@
+#!/usr/bin/python3
+import argparse
+import git
+import os
+import sys
+import time
+
+
+def traverse(obj, prefix='', submodules=False):
+    if isinstance(obj, git.Blob):
+        yield os.path.join(prefix, obj.path), obj
+    elif isinstance(obj, git.Tree):
+        for i in obj:
+            yield from traverse(i, prefix=prefix, submodules=submodules)
+    elif isinstance(obj, git.Submodule):
+        if submodules:
+            prefix=os.path.join(prefix, obj.path)
+            yield from traverse(obj.module().tree(), prefix=prefix, submodules=submodules)
+    else:
+        raise AssertionError("unknown object type: {!r}".format(obj.type))
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description='Set timestamp of all files in git working tree to committed date of last commit touching the '
+                    ' respective file.'
+    )
+    parser.add_argument(
+        'path',
+        nargs='?',
+        default='.',
+        help='Repository location (default: %(default)s).'
+    )
+    parser.add_argument(
+        '--with-submodules',
+        '-s', action='store_true',
+        help='Traverse Git submodules (default: %(default)s).'
+    )
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+    repo = git.Repo(args.path)
+    for path, blob in traverse(repo.tree(), submodules=args.with_submodules):
+        latest_commit = next(repo.iter_commits(paths=path, max_count=1))
+        if not repo.is_dirty(path=path):
+            full_path=os.path.join(args.path, path)
+            os.utime(full_path, times=(time.time(), latest_commit.committed_date))
+
+
+if __name__ == '__main__':
+    main()
