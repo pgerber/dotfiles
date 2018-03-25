@@ -1,0 +1,57 @@
+#!/usr/bin/python3
+import argparse
+import git
+import os
+import sys
+import time
+
+
+def traverse(obj, prefix='', submodules=False, path='.'):
+    if isinstance(obj, git.Blob):
+        if os.path.normpath(os.path.commonpath([obj.path, path])) == path:
+            yield os.path.join(prefix, obj.path), obj
+    elif isinstance(obj, git.Tree):
+        for i in obj:
+            yield from traverse(i, prefix=prefix, submodules=submodules, path=path)
+    elif isinstance(obj, git.Submodule):
+        if submodules:
+            prefix=os.path.join(prefix, obj.path)
+            yield from traverse(obj.module().tree(), prefix=prefix, submodules=submodules, path=path)
+    else:
+        raise AssertionError("unknown object type: {!r}".format(obj.type))
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description='Set timestamp of all files in `path` to the commit time of last commit touching the '
+                    'respective file.'
+    )
+    parser.add_argument(
+        'path',
+        nargs='?',
+        default='.',
+        help='Directory of file (default: %(default)s). Must be within a git working tree.'
+    )
+    parser.add_argument(
+        '--with-submodules',
+        '-s', action='store_true',
+        help='Traverse Git submodules (default: %(default)s).'
+    )
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+    repo = git.Repo(args.path, search_parent_directories=True)
+    repo_path = repo.working_tree_dir
+    rel_path = os.path.relpath(os.path.abspath(args.path), start=repo.working_tree_dir)
+    for path, blob in traverse(repo.tree(), submodules=args.with_submodules, path=rel_path):
+        path = os.path.join(repo_path, path)
+        latest_commit = next(repo.iter_commits(paths=path)) #, max_count=1)
+        if not repo.is_dirty(path=path, index=False):
+            full_path=os.path.join(args.path, path)
+            os.utime(full_path, times=(time.time(), latest_commit.committed_date))
+
+
+if __name__ == '__main__':
+    main()

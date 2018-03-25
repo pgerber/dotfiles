@@ -33,6 +33,22 @@ By symbol/description:
       1 → EPERM           → Operation not permitted
      13 → EACCES          → Permission denied
 
+git-ts
+------
+
+Set modification timestamp for file or all files contained in a directory recursively to the time of the last Git
+commit touching the respective file.
+
+
+Example
+^^^^^^^
+
+.. code-block:: bash
+
+    git-ts dotfiles/bin
+
+``dotfiles/bin`` must be within a git repository. ``--help`` for more information.
+
 
 grexec
 ------
