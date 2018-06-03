@@ -100,6 +100,9 @@ class Sandbox:
             raise SandboxError('Sandbox name {!r} must match pattern {!r}.'.format(name, self.is_valid_name.pattern))
         self._name = name
 
+    def pid_file(self, name):
+        return self.base_dir / (name + '.pid')
+
     def create_sandbox(self):
         self.create_base_dir()
         self.create_download_link()
@@ -156,6 +159,10 @@ class Sandbox:
             PULSE_COOKIE    = self.pulse_cookie.as_posix(),
             PULSE_SERVER    = self.pulse_server
         )
+
+        with self.pid_file(self.name).open('w') as f:
+            print(os.getpid(), file=f)
+
         os.execvpe(self.exec, [self.exec] + args + self.args, env)
 
     def check_sandbox_exists(self):
@@ -173,9 +180,14 @@ class Sandbox:
             print(sandbox.stem)
 
     def print_sandboxes_advanced(self):
-        print('NAME       RUNNING  VERSION  CHANNEL  VOLATILE  AUDIO')
+        print('NAME       PID      VERSION  CHANNEL  VOLATILE  AUDIO')
         for sandbox in self.list_sandboxes():
-            running = str(self.is_locked(sandbox))
+            pid_file = self.pid_file(sandbox.stem)
+            if self.is_locked(sandbox.stem) and pid_file.exists():
+                with pid_file.open() as f:
+                    running = f.read().strip()
+            else:
+                running = '-'
             config = self.parse_config(sandbox)
             print('{:10} {:8} {version:8} {channel:8} {volatile:9} {audio:5}'.format(sandbox.stem, running, **config))
 
