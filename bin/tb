@@ -1,7 +1,10 @@
 #!/usr/bin/python3
 from pathlib import Path
 import enum
+import fcntl
 import functools
+import itertools
+import json
 import os
 import re
 import tempfile
@@ -12,6 +15,7 @@ import sys
 eprint = functools.partial(print, file=sys.stderr)
 
 
+
 class SandboxError(Exception):
     pass
 
@@ -20,8 +24,9 @@ class Type(enum.Enum):
     create = 0
     start = 1
     list = 2
-    remove = 3
-    help = 4
+    list_advanced = 3
+    remove = 4
+    help = 5
 
 
 class Sandbox:
@@ -48,6 +53,8 @@ class Sandbox:
             self.name = arg[6:]
         elif arg == '++help':
             self.type = Type.help
+        elif arg == '++list':
+            self.type = Type.list_advanced
         elif arg.startswith('++'):
             raise SandboxError('Unknown command {!r}.'.format(arg))
         elif arg == '+':
@@ -56,13 +63,32 @@ class Sandbox:
             self.type = Type.start
             self.name = arg[1:]
             self.args = args[2:]
-        else:  # start or create 'default' sandbox
+        else:  # start and/or create an auto_* sandbox
             self.type = Type.create
-            self.name = 'default'
+            self.name = self.find_free_volatile()
             self.args = args[1:]
 
         if self.name is not None:
             self.path = self.base_dir / self.name
+
+    def find_free_volatile(self):
+        prefix = 'auto_'
+        for i in itertools.count():
+            name = prefix + str(i)
+            if not self.is_locked(name):
+                return name
+
+    def is_locked(self, name):
+        lockfile = self.base_dir / name / 'runtime' / 'sandboxed-tor-browser' / 'lock'
+        if not lockfile.exists():
+            return False
+
+        with lockfile.open() as f:
+            try:
+                fcntl.flock(f.fileno(), fcntl.LOCK_SH|fcntl.LOCK_NB)
+                return False
+            except BlockingIOError:
+                return True
 
     @property
     def name(self):
@@ -71,7 +97,7 @@ class Sandbox:
     @name.setter
     def name(self, name):
         if name is not None and not self.is_valid_name.search(name):
-            raise SandboxError('Sandbox name must match pattern {!r}.'.format(self.is_valid_name.pattern))
+            raise SandboxError('Sandbox name {!r} must match pattern {!r}.'.format(name, self.is_valid_name.pattern))
         self._name = name
 
     def create_sandbox(self):
@@ -99,12 +125,15 @@ class Sandbox:
     def execute(self):
         if self.type == Type.create:
             self.create_sandbox()
+            self.args = [ '-advanced' ] + self.args
             self.start_sandbox()
         elif self.type == Type.start:
             self.check_sandbox_exists()
             self.start_sandbox()
         elif self.type == Type.list:
-            self.list_sandboxes()
+            self.print_sandboxes()
+        elif self.type == Type.list_advanced:
+            self.print_sandboxes_advanced()
         elif self.type == Type.remove:
             self.check_sandbox_exists()
             self.remove_sandbox()
@@ -135,8 +164,46 @@ class Sandbox:
 
     def list_sandboxes(self):
         if self.base_dir.exists():
-            for dir in sorted(self.base_dir.iterdir()):
-                print(dir.stem)
+            return sorted(filter(lambda i: i.is_dir(), self.base_dir.iterdir()))
+        else:
+            return []
+
+    def print_sandboxes(self):
+        for sandbox in self.list_sandboxes():
+            print(sandbox.stem)
+
+    def print_sandboxes_advanced(self):
+        print('NAME       RUNNING  VERSION  CHANNEL  VOLATILE  AUDIO')
+        for sandbox in self.list_sandboxes():
+            running = str(self.is_locked(sandbox))
+            config = self.parse_config(sandbox)
+            print('{:10} {:8} {version:8} {channel:8} {volatile:9} {audio:5}'.format(sandbox.stem, running, **config))
+
+    def parse_config(self, base_dir):
+        sb_config = base_dir / 'config' / 'sandboxed-tor-browser' / 'sandboxed-tor-browser.json'
+        manifest = base_dir / 'data' / 'sandboxed-tor-browser' / 'manifest.json'
+        audio = '?'
+        channel = '?'
+        version = '?'
+        volatile = '?'
+
+        if sb_config.exists():
+            with sb_config.open() as f:
+                content = json.load(f)
+
+            if not content.get('firstLaunch', True):
+                channel = content.get('channel', '?')
+                sandbox = content.get('sandbox')
+                if sandbox is not None:
+                    volatile = str(sandbox.get('enableAmnesiacProfileDirectory', '?'))
+                    audio = str(sandbox.get('enablePulseAudio', '?'))
+
+        if manifest.exists():
+            with manifest.open() as f:
+                content = json.load(f)
+            version = content.get('version', '?')
+
+        return { 'channel': channel, 'volatile': volatile, 'audio': audio, 'version': version }
 
     def remove_sandbox(self):
         def handler(func, path, exc):
@@ -145,8 +212,8 @@ class Sandbox:
         if self.path.exists():
             shutil.rmtree(self.path.as_posix(), onerror=handler)
         link = self.link_path()
-        if link.exists():
-            self.link_path().unlink()
+        if link.is_symlink():
+            link.unlink()
 
     @staticmethod
     def usage():
