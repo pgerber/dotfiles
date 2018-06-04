@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 from pathlib import Path
+from datetime import datetime, timezone
 import enum
 import fcntl
 import functools
@@ -127,7 +128,21 @@ class Sandbox:
     def create_logfile(self):
         dir = '/dev/shm'
         if os.access(dir, os.W_OK) and os.path.ismount(dir):
-            return tempfile.mktemp('.log', 'tb-{}-'.format(self.name), dir)
+            with tempfile.NamedTemporaryFile(
+                    mode='w',
+                    prefix='tb-{}-'.format(self.name),
+                    suffix='.log',
+                    dir=dir,
+                    delete=False) as f:
+                json.dump({
+                    'name': self.name,
+                    'start': datetime.now(timezone.utc).astimezone().strftime('%Y-%m-%dT%H:%M:%S.%f%z'),
+                    'pid': os.getpid(),
+                    'args': self.args
+                }, f)
+                f.write('\n')
+                f.flush()
+            return f.name
 
     def execute(self):
         if self.type == Type.create:
@@ -151,10 +166,6 @@ class Sandbox:
 
     def start_sandbox(self):
         args = ['-debug']
-        logfile = self.create_logfile()
-        if logfile is not None:
-            args.extend(['-l', logfile])
-
         env = os.environ.copy()
         env.update(
             XDG_RUNTIME_DIR = (self.path / 'runtime').as_posix(),
@@ -169,6 +180,10 @@ class Sandbox:
 
         with self.pid_file(self.name).open('w') as f:
             print(os.getpid(), file=f)
+
+        logfile = self.create_logfile()
+        if logfile is not None:
+            args.extend(['-l', logfile])
 
         os.execvpe(self.exec, [self.exec] + args + self.args, env)
 
