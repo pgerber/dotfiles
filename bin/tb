@@ -20,6 +20,10 @@ class SandboxError(Exception):
     pass
 
 
+class SandboxUnavailableError(SandboxError):
+    pass
+
+
 class Type(enum.Enum):
     create = 0
     start = 1
@@ -160,6 +164,9 @@ class Sandbox:
             PULSE_SERVER    = self.pulse_server
         )
 
+        if self.is_locked(self.name):
+            raise SandboxUnavailableError('Sandbox {!r} already running'.format(self.name))
+
         with self.pid_file(self.name).open('w') as f:
             print(os.getpid(), file=f)
 
@@ -167,7 +174,7 @@ class Sandbox:
 
     def check_sandbox_exists(self):
         if not self.path.exists():
-            raise SandboxError('No sandboxed named {!r}.'.format(self.name))
+            raise SandboxUnavailableError('No sandbox named {!r}.'.format(self.name))
 
     def list_sandboxes(self):
         if self.base_dir.exists():
@@ -249,8 +256,11 @@ def main():
     try:
         sb = Sandbox(sys.argv)
         sb.execute()
+    except SandboxUnavailableError as e:
+        eprint('ERROR:', e)
+        exit(1)
     except SandboxError as e:
-        eprint(e)
+        eprint('ERROR:', e)
         eprint('Use ++help for detailed usage instructions.')
         exit(1)
 
