@@ -1,11 +1,15 @@
 #!/usr/bin/python3
+import atexit
 from pathlib import Path
+from datetime import datetime, timezone
 import enum
 import fcntl
 import functools
 import itertools
 import json
 import os
+import signal
+import subprocess
 import re
 import tempfile
 import shutil
@@ -17,6 +21,10 @@ eprint = functools.partial(print, file=sys.stderr)
 
 
 class SandboxError(Exception):
+    pass
+
+
+class SandboxArgumentError(SandboxError):
     pass
 
 
@@ -56,9 +64,9 @@ class Sandbox:
         elif arg == '++list':
             self.type = Type.list_advanced
         elif arg.startswith('++'):
-            raise SandboxError('Unknown command {!r}.'.format(arg))
+            raise SandboxArgumentError('Unknown command {!r}.'.format(arg))
         elif arg == '+':
-            raise SandboxError('Expected name after \'+\'')
+            raise SandboxArgumentError('Expected name after \'+\'')
         elif arg.startswith('+'): # start given sandbox
             self.type = Type.start
             self.name = arg[1:]
@@ -75,15 +83,34 @@ class Sandbox:
         prefix = 'auto'
         for i in itertools.count():
             name = prefix + str(i)
-            if not self.is_locked(name):
+            try:
+                self.lock(name)
                 return name
+            except BlockingIOError:
+                pass
+
+    def lock(self, name):
+        lockfile = self.pid_file(name).open('a')
+        fcntl.flock(lockfile.fileno(), fcntl.LOCK_EX|fcntl.LOCK_NB)
+        lockfile.truncate(0)
+        print(os.getpid(), file=lockfile)
+        lockfile.flush()
+        return lockfile
+
+
+    def assert_sandbox_not_running(self, name):
+        lock_file = self.base_dir / name / 'runtime' / 'sandboxed-tor-browser' / 'lock'
+        if lock_file.exists():
+            with lock_file.open() as f:
+                fcntl.flock(f.fileno(), fcntl.LOCK_SH|fcntl.LOCK_NB)
+                
 
     def is_locked(self, name):
-        lockfile = self.base_dir / name / 'runtime' / 'sandboxed-tor-browser' / 'lock'
-        if not lockfile.exists():
+        pid_file = self.pid_file(name)
+        if not pid_file.exists():
             return False
 
-        with lockfile.open() as f:
+        with pid_file.open() as f:
             try:
                 fcntl.flock(f.fileno(), fcntl.LOCK_SH|fcntl.LOCK_NB)
                 return False
@@ -97,7 +124,7 @@ class Sandbox:
     @name.setter
     def name(self, name):
         if name is not None and not self.is_valid_name.search(name):
-            raise SandboxError('Sandbox name {!r} must match pattern {!r}.'.format(name, self.is_valid_name.pattern))
+            raise SandboxArgumentError('Sandbox name {!r} must match pattern {!r}.'.format(name, self.is_valid_name.pattern))
         self._name = name
 
     def pid_file(self, name):
@@ -123,7 +150,16 @@ class Sandbox:
     def create_logfile(self):
         dir = '/dev/shm'
         if os.access(dir, os.W_OK) and os.path.ismount(dir):
-            return tempfile.mktemp('.log', 'tb-{}-'.format(self.name), dir)
+            with tempfile.NamedTemporaryFile(mode='w', prefix='tb-{}-'.format(self.name), suffix='.log', dir=dir, delete=False) as f:
+                json.dump({
+                    'name': self.name,
+                    'start': datetime.now(timezone.utc).astimezone().strftime('%Y-%m-%dT%H:%M:%S.%f%z'),
+                    'pid': os.getpid(),
+                    'args': self.args
+                }, f)
+                f.write('\n')
+                f.flush()
+            return f.name
 
     def execute(self):
         if self.type == Type.create:
@@ -147,9 +183,7 @@ class Sandbox:
 
     def start_sandbox(self):
         args = ['-debug']
-        logfile = self.create_logfile()
-        if logfile is not None:
-            args.extend(['-l', logfile])
+        sigs = [ signal.SIGINT, signal.SIGTERM ]
 
         env = os.environ.copy()
         env.update(
@@ -160,10 +194,36 @@ class Sandbox:
             PULSE_SERVER    = self.pulse_server
         )
 
-        with self.pid_file(self.name).open('w') as f:
-            print(os.getpid(), file=f)
+        try:
+            lock = self.lock(self.name)
+        except BlockingIOError:
+            raise SandboxError('Sandbox {!r} already running'.format(self.name))
 
-        os.execvpe(self.exec, [self.exec] + args + self.args, env)
+        self.assert_sandbox_not_running(self.name)
+
+        logfile = self.create_logfile()
+        if logfile is not None:
+            args.extend(['-l', logfile])
+
+        proc = None
+
+        def terminate(sig, stack_frame):
+            if proc is not None:
+                if sig is not None:
+                    eprint('Received signal {}, terminating sandbox ...'.format(signal.Signals(sig).name))
+                else:
+                    eprint('Terminating sandbox ...')
+                proc.terminate()
+            if sig is not None:
+                exit(1)
+
+        atexit.register(terminate, None, None)
+        for sig in sigs:
+            signal.signal(sig, terminate)
+
+        proc = subprocess.Popen([self.exec] + args + self.args, env=env)
+        proc.communicate()
+            
 
     def check_sandbox_exists(self):
         if not self.path.exists():
@@ -182,8 +242,8 @@ class Sandbox:
     def print_sandboxes_advanced(self):
         print('NAME       PID      VERSION  CHANNEL  VOLATILE  AUDIO')
         for sandbox in self.list_sandboxes():
-            pid_file = self.pid_file(sandbox.stem)
-            if self.is_locked(sandbox.stem) and pid_file.exists():
+            if self.is_locked(sandbox.stem):
+                pid_file = self.pid_file(sandbox.stem)
                 with pid_file.open() as f:
                     running = f.read().strip()
             else:
@@ -249,9 +309,12 @@ def main():
     try:
         sb = Sandbox(sys.argv)
         sb.execute()
-    except SandboxError as e:
-        eprint(e)
+    except SandboxArgumentError as e:
+        eprint('ERROR:', e)
         eprint('Use ++help for detailed usage instructions.')
+        exit(1)
+    except SandboxError as e:
+        eprint('ERROR:', e)
         exit(1)
 
 

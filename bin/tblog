@@ -1,7 +1,9 @@
 #!/usr/bin/python3
 import argparse
 import collections
-from datetime import datetime
+from datetime import datetime, timezone
+import fcntl
+import json
 import os
 import pathlib
 import re
@@ -53,16 +55,53 @@ def parse_args(args):
 
 
 def list_logs(logs_for_sandboxes, *, all=False):
-    now = datetime.now().replace(microsecond=0)
+    now = datetime.utcnow().replace(microsecond=0, tzinfo=timezone.utc).astimezone()
+    tz = now.tzinfo
     for name, logs in sorted(logs_for_sandboxes.items()):
-        print(" Sandbox {!r} ".format(name).center(80, '-'))
-        print(" NO -                PATH                 -     MODIFICATION TIME")
-        for no, log in enumerate(logs):
-            timestamp =  datetime.fromtimestamp(log.stat().st_mtime).replace(microsecond=0)
-            age = now - timestamp
-            print("{:3} - {:35} - {} ({} ago)".format(no, log.as_posix(), timestamp, age))
+        print(" Sandbox {!r} ".format(name).center(60, '-'))
         print()
+        for no, log in enumerate(logs):
+            mtime =  datetime.fromtimestamp(log.stat().st_mtime).replace(microsecond=0, tzinfo=tz)
+            mago = now - mtime
+            metadata = read_metadata(log)
+            btime = bago = '-'
+            if 'start' in metadata:
+                btime = datetime.strptime(metadata['start'], '%Y-%m-%dT%H:%M:%S.%f%z').replace(microsecond=0)
+                bago = now - btime
+            print('{} - {}'.format(no, log.as_posix()))
+            print('    created:  {} ({} ago)'.format(btime, bago))
+            print('    modified: {} ({} ago)'.format(mtime, mago))
+            status = 'running' if is_running(name, metadata.get('pid')) else 'dead'
+            print('    pid:      {} ({})'.format(metadata.get('pid'), status))
+            print()
     print('Use -p NO to select a log file (e.g. -p 0).')
+
+
+def read_metadata(path):
+    try:
+        with path.open() as f:
+            return json.loads(f.readline())
+    except json.JSONDecodeError:
+        return {}
+
+
+def is_running(name, pid):
+    base_path = pathlib.Path('~/.local/share/tor-browser-sandboxes/').expanduser()
+    pid_file = base_path / (name + '.pid')
+    if not pid_file.exists():
+        return False
+
+    with pid_file.open() as f:
+        running_pid = f.read().strip()
+
+    if pid == int(running_pid):
+        try:
+            with pid_file.open() as f:
+                fcntl.flock(f.fileno(), fcntl.LOCK_SH|fcntl.LOCK_NB)
+        except BlockingIOError:
+            return True
+
+    return False
 
 
 def main(args):
