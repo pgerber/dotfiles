@@ -1,3 +1,0 @@
--
-   name: install Tor
-   openbsd_pkg: name=tor state=latest

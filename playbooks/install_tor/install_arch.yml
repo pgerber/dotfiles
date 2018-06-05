@@ -1,3 +1,0 @@
--
-   name: install Tor
-   pacman: name=tor state=latest update_cache=yes

@@ -1,7 +1,0 @@
-#!/bin/sh
-
-err=0
-for playbook in playbooks/*/main.yml; do
-    ansible-playbook -i tests/ansible_inventory "$playbook" --syntax-check || err=1
-    done
-[ $err = 0 ]

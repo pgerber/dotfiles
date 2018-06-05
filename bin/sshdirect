@@ -1,3 +1,0 @@
-#!/bin/sh
-export SSH_CONNECT_DIRECTLY_BY_DEFAULT=1
-exec ssh "$@"

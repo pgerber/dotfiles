@@ -1,5 +1,3 @@
-# Peter's Dotfiles
+# Moved
 
-[![Build Status](https://travis-ci.org/pgerber/dotfiles.svg?branch=master)](https://travis-ci.org/pgerber/dotfiles)
-
-Little helpers and configs I consider useful.
+[This repository has been moved.](https://gitlab.com/pgerber/dotfiles)
